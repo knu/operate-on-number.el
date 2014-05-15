@@ -61,6 +61,8 @@
 
 ;;; Code:
 
+(require 'calc-bin)
+
 ;;;###autoload
 (defun find-number-at-point ()
   "Search the current line till EOL for a number.
@@ -95,6 +97,7 @@ number and return the value.  Raise an error otherwise."
     (?^ expt (2))
     (?< ash (1) :display "<<")
     (?> (lambda (a b) (ash a (- b))) (1) :display ">>")
+    (?b math-format-binary ())
     (?o (lambda (a) (format "%o" a)) ())
     (?x (lambda (a) (format "%x" a)) ())
     (?X (lambda (a) (format "%X" a)) ()))
