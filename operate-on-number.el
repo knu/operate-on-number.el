@@ -28,7 +28,7 @@
 ;; Author: Akinori MUSHA <knu@iDaemons.org>
 ;; URL: https://github.com/knu/operate-on-number.el
 ;; Created: 15 May 2014
-;; Version: 1.0.0
+;; Version: 1.0.0.20140515
 ;; Keywords: editing
 
 ;;; Commentary:
@@ -178,12 +178,6 @@ point for the operation if applicable."
   (let* ((number (find-number-at-point))
          (key (read-char (format "Apply on %s:" number) t)))
     (apply-operation-to-number-at-point key t)))
-
-;;;###autoload
-(eval-after-load 'multiple-cursors-core
-  '(progn
-     (add-to-list 'mc--default-cmds-to-run-for-all 'operate-on-number-at-point)
-     (add-to-list 'mc--default-cmds-to-run-for-all 'apply-operation-to-number-at-point)))
 
 (provide 'operate-on-number)
 
