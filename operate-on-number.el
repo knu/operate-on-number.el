@@ -142,7 +142,10 @@ If called interactively, use the last key input as KEY.
 
 If READ-ARGS is non-nil, an argument is read from keyboard when
 there is no prefix argument."
-  (interactive (list last-command-event nil))
+  (interactive (list
+                (let ((keys (this-command-keys-vector)))
+                  (elt keys (1- (length keys))))
+                nil))
   (let* ((arg (and current-prefix-arg
                    (prefix-numeric-value current-prefix-arg)))
          (number (find-number-at-point))
