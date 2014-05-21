@@ -41,7 +41,7 @@
 ;; double a number, which function uses the last key typed as function
 ;; specifier and supplies with a default argument which in this case
 ;; of * is 2.  This command takes numeric argument, so you can type
-;; M-3 <some prefix> * to tiple the number.
+;; M-3 <some prefix> * to triple the number.
 ;;
 ;; For the predefined operation list and how to define a new
 ;; operation, see `operate-on-number-at-point-alist'.
@@ -145,7 +145,7 @@ For possible keys of PLIST, see `operate-on-number-at-point-alist'."
 If called interactively, use the last key input as KEY.
 
 If the operation requires an additional operand, it is taken from
-one of the the following sources in the order named:
+one of the following sources in the order named:
 
 1. Prefix argument if given
 
