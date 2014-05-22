@@ -104,6 +104,11 @@ number and return the value.  Raise an error otherwise."
     (?o () (lambda (a) (format "%o" a)))
     (?x () (lambda (a) (format "%x" a)))
     (?X () (lambda (a) (format "%X" a)))
+    (?# (10) (lambda (a b)
+               (let ((calc-number-radix b))
+                 (math-format-radix a)))
+        :display "in base"
+        :read t)
     (?% ("%s") (lambda (a b) (format b a))
         :display "formatted with"
         :read t))
