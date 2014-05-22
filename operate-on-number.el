@@ -178,16 +178,17 @@ one of the following sources in the order named:
          (oargs (or (cdr (assoc key operate-on-number-at-point-alist))
                     (error "Unknown operator: %c" key)))
          (defargs (nth 0 oargs))
+         (defarg (car defargs))
          (func (nth 1 oargs))
          (plist (nthcdr 2 oargs))
          (display (or (plist-get plist :display) (string key)))
          (args (cond ((null defargs)
                       nil)
-                     (arg
+                     ((and (numberp defarg)
+                           arg)
                       (list arg))
                      (read-args
-                      (let* ((defarg (car defargs))
-                             (prompt (format "Insert %s %s " number display))
+                      (let* ((prompt (format "Insert %s %s " number display))
                              (input (if (numberp defarg)
                                         (read-number prompt defarg)
                                       (read-string prompt nil nil
