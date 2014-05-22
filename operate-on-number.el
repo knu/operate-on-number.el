@@ -28,7 +28,7 @@
 ;; Author: Akinori MUSHA <knu@iDaemons.org>
 ;; URL: https://github.com/knu/operate-on-number.el
 ;; Created: 15 May 2014
-;; Version: 1.0.1
+;; Version: 1.0.2
 ;; Keywords: editing
 
 ;;; Commentary:
@@ -93,14 +93,15 @@ number and return the value.  Raise an error otherwise."
     (?- - (1))
     (?* * (2))
     (?/ / (2))
-    (?% % (2))
+    (?\\ % (2))
     (?^ expt (2))
     (?< ash (1) :display "<<")
     (?> (lambda (a b) (ash a (- b))) (1) :display ">>")
     (?b math-format-binary ())
     (?o (lambda (a) (format "%o" a)) ())
     (?x (lambda (a) (format "%x" a)) ())
-    (?X (lambda (a) (format "%X" a)) ()))
+    (?X (lambda (a) (format "%X" a)) ())
+    (?% (lambda (a b) (format b a)) ("%s") :display "formatted with"))
   "A list of (KEY FUNC DEFARGS ...).
 
 KEY is used immediately following `apply-on-number-at-point' to
@@ -170,7 +171,13 @@ one of the following sources in the order named:
                      (arg
                       (list arg))
                      (read-args
-                      (list (read-number (format "Insert %s %s " number display))))
+                      (let* ((defarg (car defargs))
+                             (prompt (format "Insert %s %s " number display))
+                             (input (if (numberp defarg)
+                                        (read-number prompt defarg)
+                                      (read-string prompt nil nil
+                                                   defarg))))
+                        (list input)))
                      (t
                       defargs))))
     (apply-to-number-at-point func args plist)))
