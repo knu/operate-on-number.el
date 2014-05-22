@@ -93,7 +93,8 @@ number and return the value.  Raise an error otherwise."
     (?- (1) -)
     (?* (2) *)
     (?/ (2) /)
-    (?\\ (2) %)
+    (?\\ (2) %
+         :read t)
     (?^ (2) expt)
     (?< (1) ash
         :display "<<")
@@ -104,14 +105,14 @@ number and return the value.  Raise an error otherwise."
     (?x () (lambda (a) (format "%x" a)))
     (?X () (lambda (a) (format "%X" a)))
     (?% ("%s") (lambda (a b) (format b a))
-        :display "formatted with"))
+        :display "formatted with"
+        :read t))
   "A list of (KEY DEFARGS FUNC ...).
 
 KEY is used immediately following `apply-on-number-at-point' to
 select an operation.
 
-DEFARGS is a list of default arguments used when invoked with
-`apply-operation-to-number-at-point', which length is taken as
+DEFARGS is a list of default arguments, which length is taken as
 the number of additional operands required for the operation.
 Currently this length must be zero or one.
 
@@ -120,7 +121,13 @@ FUNC is a function for the operation.
 After that comes an optional inline property list in which the
 following keys are available:
 
-:display	Specifies the human readable representation for the operation."
+:display	Specifies the human readable representation for
+		the operation.
+
+:read		If this property is non-nil,
+		`apply-operation-to-number-at-point' always asks
+		user for an additional argument, using a value in
+		DEFARGS as default."
   :type '(repeat
           (list (character :tag "Key")
                 (repeat :tag "Default Arguments"
@@ -165,7 +172,8 @@ one of the following sources in the order named:
 
 1. Prefix argument if given
 
-2. Number read from keyboard if READ-ARGS is non-nil
+2. Value read from keyboard if READ-ARGS is non-nil or the :read
+   property is non-nil
 
 3. Default argument predefined in `operate-on-number-at-point-alist'"
   (interactive (list
@@ -187,7 +195,8 @@ one of the following sources in the order named:
                      ((and (numberp defarg)
                            arg)
                       (list arg))
-                     (read-args
+                     ((or read-args
+                          (plist-get plist :read))
                       (let* ((prompt (format "Insert %s %s " number display))
                              (input (if (numberp defarg)
                                         (read-number prompt defarg)
