@@ -89,30 +89,33 @@ number and return the value.  Raise an error otherwise."
   :group 'editing)
 
 (defcustom operate-on-number-at-point-alist
-  '((?+ + (1))
-    (?- - (1))
-    (?* * (2))
-    (?/ / (2))
-    (?\\ % (2))
-    (?^ expt (2))
-    (?< ash (1) :display "<<")
-    (?> (lambda (a b) (ash a (- b))) (1) :display ">>")
-    (?b math-format-binary ())
-    (?o (lambda (a) (format "%o" a)) ())
-    (?x (lambda (a) (format "%x" a)) ())
-    (?X (lambda (a) (format "%X" a)) ())
-    (?% (lambda (a b) (format b a)) ("%s") :display "formatted with"))
-  "A list of (KEY FUNC DEFARGS ...).
+  '((?+ (1) +)
+    (?- (1) -)
+    (?* (2) *)
+    (?/ (2) /)
+    (?\\ (2) %)
+    (?^ (2) expt)
+    (?< (1) ash
+        :display "<<")
+    (?> (1) (lambda (a b) (ash a (- b)))
+        :display ">>")
+    (?b () math-format-binary)
+    (?o () (lambda (a) (format "%o" a)))
+    (?x () (lambda (a) (format "%x" a)))
+    (?X () (lambda (a) (format "%X" a)))
+    (?% ("%s") (lambda (a b) (format b a))
+        :display "formatted with"))
+  "A list of (KEY DEFARGS FUNC ...).
 
 KEY is used immediately following `apply-on-number-at-point' to
 select an operation.
-
-FUNC is a function for the operation.
 
 DEFARGS is a list of default arguments used when invoked with
 `apply-operation-to-number-at-point', which length is taken as
 the number of additional operands required for the operation.
 Currently this length must be zero or one.
+
+FUNC is a function for the operation.
 
 After that comes an optional inline property list in which the
 following keys are available:
@@ -120,13 +123,25 @@ following keys are available:
 :display	Specifies the human readable representation for the operation."
   :type '(repeat
           (list (character :tag "Key")
-                (function :tag "Function")
                 (repeat :tag "Default Arguments"
                         (sexp :tag "Argument"))
+                (function :tag "Function")
                 (repeat :inline t :tag "Property List"
                         (list :inline t
                               (symbol :tag "Option")
                               (sexp :tag "Value")))))
+  :set (lambda (sym val)
+         (set-default sym
+                      (mapcar #'(lambda (entry)
+                                  (let ((key (nth 0 entry))
+                                        (arg1 (nth 1 entry))
+                                        (arg2 (nth 2 entry))
+                                        (plist (nthcdr 3 entry)))
+                                    (if (and (listp arg2)
+                                             (>= 1 (length arg2)))
+                                        ;; compatibility
+                                        (append (list key arg2 arg1) plist)
+                                      entry))) val)))
   :group 'operate-on-number)
 
 (defun apply-to-number-at-point (func args &optional plist)
@@ -162,9 +177,9 @@ one of the following sources in the order named:
          (number (find-number-at-point))
          (oargs (or (cdr (assoc key operate-on-number-at-point-alist))
                     (error "Unknown operator: %c" key)))
-         (func (car oargs))
-         (defargs (cadr oargs))
-         (plist (cddr oargs))
+         (defargs (nth 0 oargs))
+         (func (nth 1 oargs))
+         (plist (nthcdr 2 oargs))
          (display (or (plist-get plist :display) (string key)))
          (args (cond ((null defargs)
                       nil)
