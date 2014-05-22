@@ -53,9 +53,12 @@
 ;;       ("-" . apply-operation-to-number-at-point)
 ;;       ("*" . apply-operation-to-number-at-point)
 ;;       ("/" . apply-operation-to-number-at-point)
+;;       ("\\" . apply-operation-to-number-at-point)
 ;;       ("^" . apply-operation-to-number-at-point)
 ;;       ("<" . apply-operation-to-number-at-point)
 ;;       (">" . apply-operation-to-number-at-point)
+;;       ("#" . apply-operation-to-number-at-point)
+;;       ("%" . apply-operation-to-number-at-point)
 ;;       ("'" . operate-on-number-at-point)))
 ;;
 
