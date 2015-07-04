@@ -1,6 +1,6 @@
 ;;; operate-on-number.el --- Operate on number at point with arithmetic functions
 
-;; Copyright (c) 2014 Akinori MUSHA
+;; Copyright (c) 2014-2015 Akinori MUSHA
 ;;
 ;; All rights reserved.
 ;;
@@ -28,7 +28,7 @@
 ;; Author: Akinori MUSHA <knu@iDaemons.org>
 ;; URL: https://github.com/knu/operate-on-number.el
 ;; Created: 15 May 2014
-;; Version: 1.1.0
+;; Version: 1.2.0
 ;; Keywords: editing
 
 ;;; Commentary:
@@ -66,25 +66,178 @@
 
 (require 'calc-bin)
 
+(defun oon--parse-number-at-point ()
+  "Parse the text around point for a number and return a vector
+with the following elements if found:
+
+0: base
+1: beginning position of the literal
+2: position for a sign; if nil, no negative number is allowed for this literal
+3: beginning position of the number part
+4: end position of the number part
+5: end position of the literal
+
+Return nil if no number is found."
+  (let (num bounds
+        (case-fold-search nil))
+    (save-excursion
+      (cond
+       ;; Decimal numbers as sexp: e.g. "100", "3.1415", "1e3"
+       ((save-excursion
+          (if (looking-back "[[:digit]]")
+              (backward-char 1))
+          (and
+           (setq num (number-at-point))
+           (setq bounds (bounds-of-thing-at-point 'sexp))
+           (not (char-equal (char-after (car bounds)) ?#))))
+        (let* ((beg (car bounds))
+               (end (cdr bounds))
+               (char (char-after beg))
+               (sign (or (char-equal char ?-) (char-equal char ?+)))
+               (nbeg (if sign (1+ beg) beg)))
+          (vector 10 beg beg nbeg end end)))
+       ;; Hexadecimal literals: e.g. "0x1e", "#x1e"
+       ((save-excursion
+          (and (looking-at "\\([+-]?0?[xX]?\\|#?[xX]?[+-]?\\)[[:xdigit:]]*")
+               (goto-char (match-end 0)))
+          (looking-back "\\(\\([+-]\\|\\b\\)0[xX]\\|#[xX]\\([+-]?\\)\\)\\([[:xdigit:]]+\\)"
+                        (line-beginning-position) t))
+        (vector 16
+                (match-beginning 0)
+                (or (match-beginning 2)
+                    (match-beginning 3))
+                (match-beginning 4)
+                (match-end 4)
+                (match-end 0)))
+       ;; Hexadecimal string literals: e.g. "\u{fffd}", "\x0f", "U+3000"
+       ((save-excursion
+          (and (looking-at "\\(\\\\?[ux]?{?\\|U?\\+?\\)[[:xdigit:]]*")
+               (goto-char (match-end 0)))
+          (looking-back "\\(\\\\[ux]{?\\|\\bU\\+\\)\\([[:xdigit:]]+\\)"
+                        (line-beginning-position) t))
+        (let ((beg (match-beginning 0))
+              (nbeg (match-beginning 2))
+              (nend (match-end 2)))
+          (vector 16
+                  beg
+                  nil
+                  nbeg
+                  nend
+                  (if (and (= (char-before nbeg) ?{)
+                           (= (char-after  nend) ?}))
+                      (1+ nend) nend))))
+       ;; Octal number literals: e.g. "0o770", "#o770"
+       ((save-excursion
+          (and (looking-at "\\([+-]?0?[oO]?\\|#?[oO]?[+-]?\\)[0-7]*") (goto-char (match-end 0)))
+          (and (not (looking-at "[[:digit:]]"))
+               (looking-back "\\(\\([+-]\\|\\b\\)0[oO]\\|#[oO]\\([+-]?\\)\\)\\([0-7]+\\)"
+                             (line-beginning-position) t)))
+        (vector 8
+                (match-beginning 0)
+                (or (match-beginning 2)
+                    (match-beginning 3))
+                (match-beginning 4)
+                (match-end 4)
+                (match-end 0)))
+       ;; Octal character literals: e.g. \033"
+       ((save-excursion
+          (and (looking-at "\\\\?[0-7]\\{1,3\\}") (goto-char (match-end 0)))
+          (looking-back "\\\\\\([0-7]\\{3\\}\\)"
+                        (line-beginning-position) t))
+        (vector 8
+                (match-beginning 0)
+                nil
+                (match-beginning 1)
+                (match-end 1)
+                (match-end 0)))
+       ;; Binary number literals: e.g. "0b110", "#b110"
+       ((save-excursion
+          (and (looking-at "\\([+-]?0?[bB]?\\|#?[bB]?[+-]?\\)[01]*") (goto-char (match-end 0)))
+          (and (not (looking-at "[[:digit:]]"))
+               (looking-back "\\(\\([+-]\\|\\b\\)0[bB]\\|#[bB]\\([+-]?\\)\\)\\([01]+\\)"
+                             (line-beginning-position) t)))
+        (vector 2
+                (match-beginning 0)
+                (or (match-beginning 2)
+                    (match-beginning 3))
+                (match-beginning 4)
+                (match-end 4)
+                (match-end 0)))
+       ;; Just a sequence of decimal digits inside a word
+       ((save-excursion
+          (and (looking-at "[+-]?[[:digit:]]*") (goto-char (match-end 0)))
+          (looking-back "\\([+-]\\)?\\([[:digit:]]+\\)"
+                        (line-beginning-position) t))
+        (vector 10
+                (match-beginning 0)
+                (match-beginning 1)
+                (match-beginning 2)
+                (match-end 2)
+                (match-end 0)))))))
+
+(defun oon--format-number (abs base sample)
+  "Format an absolute number ABS in BASE like SAMPLE."
+  (let ((str
+         (if (= base 10)
+             (format "%s" abs)
+           (let* ((calc-number-radix base)
+                  (str (math-format-radix (setq abs (floor abs))))
+                  (case-fold-search nil))
+             (if (string-match "[A-Z]" sample)
+                 str (downcase str))))))
+    (cond ((and (integerp abs)
+                (string-match "\\`0[[:xdigit:]]+\\'" sample))
+           (let ((zlen (- (length sample) (length str))))
+             (if (not (natnump zlen)) str
+                 (concat (make-string zlen ?0) str))))
+          (t
+           str))))
+
+(defun oon--parsed-number (parsed)
+  "Parse a vector PARSED into a number it represents."
+  (let* ((base (elt parsed 0))
+         (spos (elt parsed 2))
+         (nbeg (elt parsed 3))
+         (nend (elt parsed 4))
+         (str (buffer-substring-no-properties nbeg nend))
+         (abs (string-to-number str base)))
+    (if (and spos (= (char-after spos) ?-))
+        (- abs) abs)))
+
+(defun oon--replace-number (parsed number)
+  "Replace a number specified by PARSED with NUMBER."
+  (let* ((base (elt parsed 0))
+         (beg  (elt parsed 1))
+         (spos (elt parsed 2))
+         (nbeg (elt parsed 3))
+         (nend (elt parsed 4))
+         (str (buffer-substring-no-properties nbeg nend))
+         (abs (abs number))
+         (sign (if (natnump number) ?+ ?-)))
+    (if (and (null spos)
+             (= sign ?-))
+        (error "cannot replace with a negative number!"))
+    (goto-char nbeg)
+    (delete-region nbeg nend)
+    (insert (oon--format-number abs base str))
+    (if spos
+        (save-excursion
+          (goto-char spos)
+          (if (or (when (looking-at "[+-]")
+                    (delete-char 1) t)
+                  (= sign ?-))
+              (insert-char sign))))))
+
 ;;;###autoload
 (defun find-number-at-point ()
   "Search the current line till EOL for a number.
-If a pure number is found, move point to the beginning of the
-number and return the value.  Raise an error otherwise."
+If a pure number is found, move point to the end of the number
+and return the value.  Raise an error otherwise."
   (interactive)
-  (let (num)
-    (goto-char
-     (save-excursion
-       (unless (looking-back "[0-9]")
-         (skip-chars-forward "^0-9\r\n")
-         (or (looking-at "[0-9]")
-             (error "No number found before eol"))
-         (forward-char))
-       (backward-sexp)
-       (or (setq num (number-at-point))
-           (error "Not a pure number"))
-       (point)))
-    num))
+  (let ((parsed (or (oon--parse-number-at-point)
+                     (error "No number found at point"))))
+    (goto-char (elt parsed 4))
+    (oon--parsed-number parsed)))
 
 (defgroup operate-on-number nil
   "Operate on number at point."
@@ -162,12 +315,11 @@ following keys are available:
 (defun apply-to-number-at-point (func args &optional plist)
   "Apply FUNC on a number at point with ARGS.
 For possible keys of PLIST, see `operate-on-number-at-point-alist'."
-  (let* ((result (apply func (find-number-at-point) args))
-         (bounds (bounds-of-thing-at-point 'sexp)))
-    (delete-region (car bounds) (cdr bounds))
-    (insert (format "%s" result))
-    (backward-sexp)
-    result))
+  (let* ((parsed (or (oon--parse-number-at-point)
+                     (error "No number found at point")))
+         (num (oon--parsed-number parsed))
+         (result (apply func num args)))
+    (oon--replace-number parsed result)))
 
 ;;;###autoload
 (defun apply-operation-to-number-at-point (&optional key read-args)
