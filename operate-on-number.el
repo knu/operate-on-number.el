@@ -204,6 +204,17 @@ Return nil if no number is found."
     (if (and spos (= (char-after spos) ?-))
         (- abs) abs)))
 
+(defun oon--original-number-for-display (parsed)
+  (let* ((base (elt parsed 0))
+         (nbeg (elt parsed 3))
+         (nend (elt parsed 4))
+         (str (buffer-substring-no-properties nbeg nend))
+         (num (oon--parsed-number parsed))
+         (ssign (if (natnump num) "" "-")))
+    (if (= base 10)
+        (concat ssign str)
+      (concat ssign (format "%d#" base) str (format " (%s)" num)))))
+
 (defun oon--replace-number (parsed number)
   "Replace a number specified by PARSED with NUMBER."
   (let* ((base (elt parsed 0))
@@ -342,9 +353,11 @@ one of the following sources in the order named:
                 nil))
   (let* ((arg (and current-prefix-arg
                    (prefix-numeric-value current-prefix-arg)))
-         (number (find-number-at-point))
+         (parsed (or (oon--parse-number-at-point)
+                     (error "No number found at point")))
          (oargs (or (cdr (assoc key operate-on-number-at-point-alist))
                     (error "Unknown operator: %c" key)))
+         (formatted (oon--original-number-for-display parsed))
          (defargs (nth 0 oargs))
          (defarg (car defargs))
          (func (nth 1 oargs))
@@ -357,7 +370,7 @@ one of the following sources in the order named:
                       (list arg))
                      ((or read-args
                           (plist-get plist :read))
-                      (let* ((prompt (format "Insert %s %s " number display))
+                      (let* ((prompt (format "Insert %s %s " formatted display))
                              (input (if (numberp defarg)
                                         (read-number prompt defarg)
                                       (read-string prompt nil nil
@@ -377,8 +390,10 @@ key typed.
 An optional number ARG becomes a counter operand to the number at
 point for the operation if applicable."
   (interactive "*p")
-  (let* ((number (find-number-at-point))
-         (key (read-char (format "Apply on %s:" number) t)))
+  (let* ((parsed (or (oon--parse-number-at-point)
+                     (error "No number found at point")))
+         (formatted (oon--original-number-for-display parsed))
+         (key (read-char (format "Apply on %s:" formatted) t)))
     (apply-operation-to-number-at-point key t)))
 
 (provide 'operate-on-number)
