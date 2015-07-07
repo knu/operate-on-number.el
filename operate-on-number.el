@@ -79,7 +79,7 @@ with the following elements if found:
 
 Return nil if no number is found."
   (let (num bounds
-        (case-fold-search nil))
+            (case-fold-search nil))
     (save-excursion
       (if (looking-back "[[:digit:]]")
           (backward-char 1))
@@ -189,7 +189,7 @@ Return nil if no number is found."
                 (string-match "\\`0[[:xdigit:]]+\\'" sample))
            (let ((zlen (- (length sample) (length str))))
              (if (not (natnump zlen)) str
-                 (concat (make-string zlen ?0) str))))
+               (concat (make-string zlen ?0) str))))
           (t
            str))))
 
