@@ -81,11 +81,11 @@ Return nil if no number is found."
   (let (num bounds
         (case-fold-search nil))
     (save-excursion
+      (if (looking-back "[[:digit:]]")
+          (backward-char 1))
       (cond
        ;; Decimal numbers as sexp: e.g. "100", "3.1415", "1e3"
        ((save-excursion
-          (if (looking-back "[[:digit]]")
-              (backward-char 1))
           (and
            (setq num (number-at-point))
            (setq bounds (bounds-of-thing-at-point 'sexp))
@@ -235,7 +235,7 @@ If a pure number is found, move point to the end of the number
 and return the value.  Raise an error otherwise."
   (interactive)
   (let ((parsed (or (oon--parse-number-at-point)
-                     (error "No number found at point"))))
+                    (error "No number found at point"))))
     (goto-char (elt parsed 4))
     (oon--parsed-number parsed)))
 
