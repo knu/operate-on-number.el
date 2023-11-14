@@ -207,7 +207,7 @@ Return nil if no number is found."
     (cond ((and (integerp abs)
                 (string-match "\\`0[[:xdigit:]]+\\'" sample))
            (let ((zlen (- (length sample) (length str))))
-             (if (not (natnump zlen)) str
+             (if (< zlen 0) str
                (concat (make-string zlen ?0) str))))
           (t
            str))))
@@ -229,7 +229,7 @@ Return nil if no number is found."
          (nend (elt parsed 4))
          (str (buffer-substring-no-properties nbeg nend))
          (num (oon--parsed-number parsed))
-         (ssign (if (natnump num) "" "-")))
+         (ssign (if (>= num 0) "" "-")))
     (if (= base 10)
         (concat ssign str)
       (concat ssign (format "%d#" base) str (format " (%s)" num)))))
@@ -243,7 +243,7 @@ Return nil if no number is found."
          (nend (elt parsed 4))
          (str (buffer-substring-no-properties nbeg nend))
          (abs (abs number))
-         (sign (if (natnump number) ?+ ?-)))
+         (sign (if (>= number 0) ?+ ?-)))
     (if (and (null spos)
              (= sign ?-))
         (error "cannot replace with a negative number!"))
