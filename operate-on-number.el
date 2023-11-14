@@ -84,10 +84,69 @@
 ;;; Code:
 
 (require 'calc-bin)
+(require 'thingatpt)
+
+(defvar oon--invalid-decimal-regexp
+  (rx (+ digit) "." (+ digit) "." (+ digit))
+  "Regular expression to match an invalid decimal.")
+
+(defvar oon--decimal-regexp
+  (rx
+   (group-n 1
+     (group-n 2 (? (any "+-")))
+     (+ digit)
+     (? "." (+ digit))
+     (? (any "eE") (? (any "+-")) (+ digit))))
+  "Regular expression to match a decimal.")
+
+(defvar oon--integer-regexp
+  (rx
+   (group-n 1
+     (group-n 2 (? (any "+-")))
+     (+ digit)))
+  "Regular expression to match an integer.")
+
+(defvar oon--hexadecimal-regexp
+  (rx
+   (group-n 1
+     (| (: (group-n 2 (| (any "+-")
+                         word-boundary))
+           "0" (any "xX"))
+        (: "#" (any "xX")
+           (group-n 2 (? (any "+-"))))))
+   (group-n 3 (+ xdigit)))
+  "Regular expression to match a hexadecimal.")
+
+(defvar oon--octal-regexp
+  (rx
+   (group-n 1
+     (| (: (group-n 2 (| (any "+-")
+                         word-boundary))
+           "0" (any "oO"))
+        (: "#" (any "oO")
+           (group-n 2 (? (any "+-")))))
+     (group-n 3 (+ (any "0-7"))))
+   (| (not digit)
+      eos))
+  "Regular expression to match an octal.")
+
+(defvar oon--binary-regexp
+  (rx
+   (group-n 1
+     (| (: (group-n 2 (| (any "+-")
+                         word-boundary))
+           "0" (any "bB"))
+        (: "#" (any "bB")
+           (group-n 2 (? (any "+-")))))
+     (group-n 3 (+ (any "01"))))
+   (| (not digit)
+      eos))
+  "Regular expression to match a binary.")
 
 (defun oon--parse-number-at-point ()
-  "Parse the text around point for a number and return a vector
-with the following elements if found:
+  "Parse the text around point for a number.
+
+Return a vector with the following elements if found:
 
 0: base
 1: beginning position of the literal
@@ -97,102 +156,46 @@ with the following elements if found:
 5: end position of the literal
 
 Return nil if no number is found."
-  (let (num bounds
-            (case-fold-search nil))
-    (save-excursion
-      (if (looking-back "[[:digit:]]")
-          (backward-char 1))
+  (save-match-data
+    (let ((case-fold-search nil)
+          (distance 500))
       (cond
-       ;; Decimal numbers as sexp: e.g. "100", "3.1415", "1e3"
-       ((save-excursion
-          (and
-           (setq num (number-at-point))
-           (setq bounds (bounds-of-thing-at-point 'sexp))
-           (not (char-equal (char-after (car bounds)) ?#))))
-        (let* ((beg (car bounds))
-               (end (cdr bounds))
-               (char (char-after beg))
-               (sign (or (char-equal char ?-) (char-equal char ?+)))
-               (nbeg (if sign (1+ beg) beg)))
-          (vector 10 beg beg nbeg end end)))
        ;; Hexadecimal literals: e.g. "0x1e", "#x1e"
-       ((save-excursion
-          (and (looking-at "\\([+-]?0?[xX]?\\|#?[xX]?[+-]?\\)[[:xdigit:]]*")
-               (goto-char (match-end 0)))
-          (looking-back "\\(\\([+-]\\|\\b\\)0[xX]\\|#[xX]\\([+-]?\\)\\)\\([[:xdigit:]]+\\)"
-                        (line-beginning-position) t))
-        (vector 16
-                (match-beginning 0)
-                (or (match-beginning 2)
-                    (match-beginning 3))
-                (match-beginning 4)
-                (match-end 4)
-                (match-end 0)))
-       ;; Hexadecimal string literals: e.g. "\u{fffd}", "\x0f", "U+3000"
-       ((save-excursion
-          (and (looking-at "\\(\\\\?[ux]?{?\\|U?\\+?\\)[[:xdigit:]]*")
-               (goto-char (match-end 0)))
-          (looking-back "\\(\\\\[ux]{?\\|\\bU\\+\\)\\([[:xdigit:]]+\\)"
-                        (line-beginning-position) t))
-        (let ((beg (match-beginning 0))
-              (nbeg (match-beginning 2))
-              (nend (match-end 2)))
-          (vector 16
-                  beg
-                  nil
-                  nbeg
-                  nend
-                  (if (and (= (char-before nbeg) ?{)
-                           (= (char-after  nend) ?}))
-                      (1+ nend) nend))))
+       ((thing-at-point-looking-at  oon--hexadecimal-regexp distance)
+        (let ((beg (match-beginning 1))
+              (sbeg (match-beginning 2))
+              (nbeg (match-beginning 3))
+              (nend (match-end 3)))
+          (vector 16 beg sbeg nbeg nend nend)))
        ;; Octal number literals: e.g. "0o770", "#o770"
-       ((save-excursion
-          (and (looking-at "\\([+-]?0?[oO]?\\|#?[oO]?[+-]?\\)[0-7]*") (goto-char (match-end 0)))
-          (and (not (looking-at "[[:digit:]]"))
-               (looking-back "\\(\\([+-]\\|\\b\\)0[oO]\\|#[oO]\\([+-]?\\)\\)\\([0-7]+\\)"
-                             (line-beginning-position) t)))
-        (vector 8
-                (match-beginning 0)
-                (or (match-beginning 2)
-                    (match-beginning 3))
-                (match-beginning 4)
-                (match-end 4)
-                (match-end 0)))
-       ;; Octal character literals: e.g. \033"
-       ((save-excursion
-          (and (looking-at "\\\\?[0-7]\\{1,3\\}") (goto-char (match-end 0)))
-          (looking-back "\\\\\\([0-7]\\{3\\}\\)"
-                        (line-beginning-position) t))
-        (vector 8
-                (match-beginning 0)
-                nil
-                (match-beginning 1)
-                (match-end 1)
-                (match-end 0)))
+       ((thing-at-point-looking-at oon--octal-regexp distance)
+        (let ((beg (match-beginning 1))
+              (sbeg (match-beginning 2))
+              (nbeg (match-beginning 3))
+              (nend (match-end 3)))
+          (vector 8 beg sbeg nbeg nend nend)))
        ;; Binary number literals: e.g. "0b110", "#b110"
-       ((save-excursion
-          (and (looking-at "\\([+-]?0?[bB]?\\|#?[bB]?[+-]?\\)[01]*") (goto-char (match-end 0)))
-          (and (not (looking-at "[[:digit:]]"))
-               (looking-back "\\(\\([+-]\\|\\b\\)0[bB]\\|#[bB]\\([+-]?\\)\\)\\([01]+\\)"
-                             (line-beginning-position) t)))
-        (vector 2
-                (match-beginning 0)
-                (or (match-beginning 2)
-                    (match-beginning 3))
-                (match-beginning 4)
-                (match-end 4)
-                (match-end 0)))
-       ;; Just a sequence of decimal digits inside a word
-       ((save-excursion
-          (and (looking-at "[+-]?[[:digit:]]*") (goto-char (match-end 0)))
-          (looking-back "\\([+-]\\)?\\([[:digit:]]+\\)"
-                        (line-beginning-position) t))
-        (vector 10
-                (match-beginning 0)
-                (match-beginning 1)
-                (match-beginning 2)
-                (match-end 2)
-                (match-end 0)))))))
+       ((thing-at-point-looking-at oon--binary-regexp distance)
+        (let ((beg (match-beginning 1))
+              (sbeg (match-beginning 2))
+              (nbeg (match-beginning 3))
+              (nend (match-end 3)))
+          (vector 2 beg sbeg nbeg nend nend)))
+       ;; Decimal: e.g. "3.1415", "-1e2", "1.25e-3"
+       ((and (not (thing-at-point-looking-at oon--invalid-decimal-regexp distance))
+             (thing-at-point-looking-at oon--decimal-regexp distance))
+        (let ((beg (match-beginning 1))
+              (end (match-end 1))
+              (sbeg (match-beginning 2))
+              (nbeg (match-end 2)))
+          (vector 10 beg sbeg nbeg end end)))
+       ;; Integer: e.g. "42", "-100"
+       ((thing-at-point-looking-at oon--integer-regexp distance)
+        (let ((beg (match-beginning 1))
+              (end (match-end 1))
+              (sbeg (match-beginning 2))
+              (nbeg (match-end 2)))
+          (vector 10 beg sbeg nbeg end end)))))))
 
 (defun oon--format-number (abs base sample)
   "Format an absolute number ABS in BASE like SAMPLE."
