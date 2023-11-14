@@ -1,6 +1,6 @@
 ;;; operate-on-number.el --- Operate on number at point with arithmetic functions
 
-;; Copyright (c) 2014-2015 Akinori MUSHA
+;; Copyright (c) 2014-2023 Akinori MUSHA
 ;;
 ;; All rights reserved.
 ;;
@@ -59,7 +59,8 @@
 ;;       (">" . apply-operation-to-number-at-point)
 ;;       ("#" . apply-operation-to-number-at-point)
 ;;       ("%" . apply-operation-to-number-at-point)
-;;       ("'" . operate-on-number-at-point)))
+;;       ("'" . operate-on-number-at-point)
+;;       ("C-u" . operate-on-number-read-operand)))
 ;;
 
 ;;; Code:
@@ -351,8 +352,10 @@ one of the following sources in the order named:
                 (let ((keys (this-command-keys-vector)))
                   (elt keys (1- (length keys))))
                 nil))
-  (let* ((arg (and current-prefix-arg
-                   (prefix-numeric-value current-prefix-arg)))
+  (let* ((arg (if (numberp current-prefix-arg)
+                  current-prefix-arg
+                (and current-prefix-arg
+                     (prefix-numeric-value current-prefix-arg))))
          (parsed (or (oon--parse-number-at-point)
                      (error "No number found at point")))
          (oargs (or (cdr (assoc key operate-on-number-at-point-alist))
@@ -380,6 +383,11 @@ one of the following sources in the order named:
                       defargs))))
     (apply-to-number-at-point func args plist)))
 
+(defun operate-on-number-read-operand ()
+  "Read a numeric operand in the minibuffer."
+  (interactive)
+  (setq prefix-arg (read-number "Operand: ")))
+
 ;;;###autoload
 (defun operate-on-number-at-point (&optional arg)
   "Operate on number at point.
@@ -393,7 +401,7 @@ point for the operation if applicable."
   (let* ((parsed (or (oon--parse-number-at-point)
                      (error "No number found at point")))
          (formatted (oon--original-number-for-display parsed))
-         (key (read-char (format "Apply on %s:" formatted) t)))
+         (key (read-char (format "Apply on %s:" formatted))))
     (apply-operation-to-number-at-point key t)))
 
 (provide 'operate-on-number)
